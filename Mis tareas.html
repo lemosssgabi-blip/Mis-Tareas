@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis tareas</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f6;--surface:#fff;--ink:#1b2a4a;--muted:#5d6b86;--line:#d5dbe7;--accent:#2f5bea;--accent-ink:#fff;--done:#cfebdd;--done-ink:#1d5c41;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141b2d;--surface:#1d2640;--ink:#e8edf8;--muted:#9aa7c4;--line:#323f63;--accent:#7b9bff;--accent-ink:#0f1630;--done:#23493a;--done-ink:#b8ecd2;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141b2d;--surface:#1d2640;--ink:#e8edf8;--muted:#9aa7c4;--line:#323f63;--accent:#7b9bff;--accent-ink:#0f1630;--done:#23493a;--done-ink:#b8ecd2;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+main{max-width:560px;margin:0 auto;padding:28px 18px 60px}
+.when{color:var(--muted);margin:0;font-size:15px}
+.big{display:flex;align-items:baseline;gap:10px;margin:2px 0 14px}
+.big b{font-size:76px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.big span{font-size:20px;color:var(--muted)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:26px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .3s}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:16px}
+.tabs button{flex:1;border:0;background:none;color:var(--muted);font:600 15px inherit;font-family:inherit;padding:10px 6px;border-radius:9px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.add{display:flex;gap:8px;margin-bottom:18px}
+.add input{flex:1;min-width:0;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.add button{font:600 16px inherit;font-family:inherit;border:0;border-radius:10px;padding:0 18px;background:var(--ink);color:var(--bg);cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+li{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 12px 12px 14px}
+li.ok{background:var(--done);border-color:transparent;color:var(--done-ink)}
+li.ok .t{text-decoration:line-through;opacity:.8}
+.chk{width:26px;height:26px;flex:none;border:2px solid var(--muted);border-radius:7px;background:none;color:inherit;cursor:pointer;display:grid;place-items:center;font-size:16px;padding:0}
+li.ok .chk{border-color:currentColor}
+.t{flex:1;overflow-wrap:anywhere}
+.del{border:0;background:none;color:var(--muted);font-size:22px;cursor:pointer;padding:2px 8px;border-radius:6px}
+.empty{color:var(--muted);text-align:center;padding:26px 10px;border:1px dashed var(--line);border-radius:10px}
+.foot{margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <p class="when" id="when"></p>
+  <div class="big"><b id="n">0</b><span id="of"></span></div>
+  <div class="bar"><i id="fill"></i></div>
+  <div class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-f="d">Diarias</button>
+    <button role="tab" data-f="w">Semanales</button>
+    <button role="tab" data-f="m">Mensuales</button>
+  </div>
+  <div class="add">
+    <input id="inp" type="text" maxlength="120" aria-label="Nueva tarea" placeholder="Escribe una tarea y pulsa Añadir">
+    <button id="addBtn" type="button">Añadir</button>
+  </div>
+  <ul id="list"></ul>
+  <p class="foot">Las tareas se guardan en este navegador. Cada una se reinicia sola al empezar un nuevo día, semana o mes.</p>
+</main>
+<script>
+var KEY="mis-tareas-v1", NAMES={d:"hoy",w:"esta semana",m:"este mes"};
+var S={tasks:[],tab:"d"};
+try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.tasks))S=p;}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function pad(x){return(x<10?"0":"")+x}
+function period(f){
+  var d=new Date();
+  if(f==="d")return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  if(f==="m")return d.getFullYear()+"-"+pad(d.getMonth()+1);
+  var t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  var day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);
+  var y=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return t.getUTCFullYear()+"-W"+pad(Math.ceil(((t-y)/864e5+1)/7));
+}
+function label(f){
+  var d=new Date();
+  if(f==="d")return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+  if(f==="m")return d.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+  return "Semana "+period("w").split("-W")[1]+" de "+d.getFullYear();
+}
+function render(){
+  var f=S.tab, key=period(f);
+  var items=S.tasks.filter(function(t){return t.f===f});
+  var done=items.filter(function(t){return t.last===key}).length;
+  document.getElementById("when").textContent=label(f).charAt(0).toUpperCase()+label(f).slice(1);
+  document.getElementById("n").textContent=done;
+  document.getElementById("of").textContent="de "+items.length+" hechas "+NAMES[f];
+  document.getElementById("fill").style.width=(items.length?done/items.length*100:0)+"%";
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"),function(b){b.setAttribute("aria-selected",b.dataset.f===f)});
+  var ul=document.getElementById("list");ul.innerHTML="";
+  if(!items.length){var e=document.createElement("div");e.className="empty";e.textContent="Aún no tienes tareas "+({d:"diarias",w:"semanales",m:"mensuales"})[f]+". Añade la primera arriba.";ul.appendChild(e);return;}
+  items.forEach(function(t){
+    var ok=t.last===key;
+    var li=document.createElement("li");if(ok)li.className="ok";
+    var c=document.createElement("button");c.className="chk";c.type="button";c.setAttribute("aria-label",(ok?"Desmarcar: ":"Marcar como hecha: ")+t.text);c.textContent=ok?"✓":"";
+    c.onclick=function(){t.last=ok?null:key;save();render();};
+    var s=document.createElement("span");s.className="t";s.textContent=t.text;
+    var x=document.createElement("button");x.className="del";x.type="button";x.setAttribute("aria-label","Borrar: "+t.text);x.textContent="×";
+    x.onclick=function(){S.tasks=S.tasks.filter(function(y){return y!==t});save();render();};
+    li.appendChild(c);li.appendChild(s);li.appendChild(x);ul.appendChild(li);
+  });
+}
+function add(){
+  var i=document.getElementById("inp"),v=i.value.trim();if(!v)return;
+  S.tasks.push({id:Date.now(),text:v,f:S.tab,last:null});i.value="";save();render();i.focus();
+}
+document.getElementById("addBtn").onclick=add;
+document.getElementById("inp").addEventListener("keydown",function(e){if(e.key==="Enter")add()});
+document.getElementById("tabs").onclick=function(e){var b=e.target.closest("button");if(b){S.tab=b.dataset.f;save();render();}};
+render();
+</script>
+</body>
+</html>
